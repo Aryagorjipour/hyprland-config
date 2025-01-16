@@ -1,0 +1,639 @@
+#!/bin/bash
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+echo -e "${BLUE}Starting Hyprland installation and configuration...${NC}"
+
+# Function to check if a package is installed
+is_installed() {
+    pacman -Qi "$1" &> /dev/null
+    return $?
+}
+
+# Function to remove existing configurations
+remove_existing() {
+    echo -e "${RED}Removing existing configurations...${NC}"
+    rm -rf ~/.config/{hypr,waybar,rofi,alacritty,dunst}
+    rm -rf ~/.local/share/hypr
+    
+    # Remove existing packages
+    local packages=(
+        "hyprland" "waybar" "rofi" "alacritty" "dunst" "firefox"
+        "zsh" "thunar" "obsidian" "git" "go" "visual-studio-code-bin"
+    )
+    
+    for pkg in "${packages[@]}"; do
+        if is_installed "$pkg"; then
+            sudo pacman -Rns "$pkg" --noconfirm
+        fi
+    done
+}
+
+# Install required packages
+install_packages() {
+    echo -e "${GREEN}Installing required packages...${NC}"
+    
+    # Update system first
+    sudo pacman -Syu --noconfirm
+    
+    # Install yay if not installed
+    if ! command -v yay &> /dev/null; then
+        git clone https://aur.archlinux.org/yay.git
+        cd yay
+        makepkg -si --noconfirm
+        cd ..
+        rm -rf yay
+    fi
+    
+    # Install packages
+    yay -S --noconfirm \
+        hyprland waybar-hyprland rofi alacritty dunst \
+        firefox zsh thunar obsidian git go visual-studio-code-bin \
+        brightnessctl pamixer network-manager-applet blueman \
+        grim slurp wl-clipboard hyprpaper \
+        btop htop neofetch \
+        noto-fonts noto-fonts-cjk noto-fonts-emoji \
+        pipewire wireplumber xdg-desktop-portal-hyprland
+
+    # Install Oh My Zsh
+    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+}
+
+# Create configuration directories
+create_config_dirs() {
+    mkdir -p ~/.config/{hypr,waybar,rofi,alacritty,dunst}
+}
+
+# Configure Hyprland
+configure_hyprland() {
+    cat > ~/.config/hypr/hyprland.conf << 'EOL'
+# Monitor Configuration
+monitor=,preferred,auto,1
+
+# Execute at launch
+exec-once = waybar
+exec-once = dunst
+exec-once = hyprpaper
+exec-once = nm-applet
+exec-once = blueman-applet
+
+# Theme
+general {
+    border_size = 2
+    gaps_in = 5
+    gaps_out = 10
+    col.active_border = rgb(9370DB) rgb(FFD700) 45deg
+    col.inactive_border = rgb(1E1E1E)
+    layout = dwindle
+}
+
+# Decoration
+decoration {
+    rounding = 8
+    blur = yes
+    blur_size = 5
+    blur_passes = 2
+    drop_shadow = yes
+    shadow_range = 15
+    shadow_render_power = 3
+    col.shadow = rgba(1E1E2E66)
+}
+
+# Animations
+animations {
+    enabled = yes
+    bezier = myBezier, 0.05, 0.9, 0.1, 1.05
+    animation = windows, 1, 7, myBezier
+    animation = windowsOut, 1, 7, default, popin 80%
+    animation = border, 1, 10, default
+    animation = fade, 1, 7, default
+    animation = workspaces, 1, 6, default
+}
+
+# Input
+input {
+    kb_layout = us
+    follow_mouse = 1
+    touchpad {
+        natural_scroll = yes
+    }
+}
+
+# Gestures
+gestures {
+    workspace_swipe = true
+    workspace_swipe_fingers = 3
+}
+
+# Window Rules
+windowrule = float, ^(pavucontrol)$
+windowrule = float, ^(blueman-manager)$
+windowrule = float, ^(nm-connection-editor)$
+
+# Keybindings
+$mainMod = SUPER
+
+# Basic bindings
+bind = $mainMod, Q, killactive
+bind = $mainMod, M, exit
+bind = $mainMod, E, exec, thunar
+bind = $mainMod, V, togglefloating
+bind = $mainMod, R, exec, rofi -show drun
+bind = $mainMod, P, pseudo
+bind = $mainMod, J, togglesplit
+bind = $mainMod, return, exec, alacritty
+
+# Move focus
+bind = $mainMod, left, movefocus, l
+bind = $mainMod, right, movefocus, r
+bind = $mainMod, up, movefocus, u
+bind = $mainMod, down, movefocus, d
+
+# Switch workspaces
+bind = $mainMod, 1, workspace, 1
+bind = $mainMod, 2, workspace, 2
+bind = $mainMod, 3, workspace, 3
+bind = $mainMod, 4, workspace, 4
+bind = $mainMod, 5, workspace, 5
+bind = $mainMod, 6, workspace, 6
+bind = $mainMod, 7, workspace, 7
+bind = $mainMod, 8, workspace, 8
+bind = $mainMod, 9, workspace, 9
+bind = $mainMod, 0, workspace, 10
+
+# Move active window to workspace
+bind = $mainMod SHIFT, 1, movetoworkspace, 1
+bind = $mainMod SHIFT, 2, movetoworkspace, 2
+bind = $mainMod SHIFT, 3, movetoworkspace, 3
+bind = $mainMod SHIFT, 4, movetoworkspace, 4
+bind = $mainMod SHIFT, 5, movetoworkspace, 5
+bind = $mainMod SHIFT, 6, movetoworkspace, 6
+bind = $mainMod SHIFT, 7, movetoworkspace, 7
+bind = $mainMod SHIFT, 8, movetoworkspace, 8
+bind = $mainMod SHIFT, 9, movetoworkspace, 9
+bind = $mainMod SHIFT, 0, movetoworkspace, 10
+
+# Mouse bindings
+bindm = $mainMod, mouse:272, movewindow
+bindm = $mainMod, mouse:273, resizewindow
+EOL
+}
+
+# Configure Waybar
+configure_waybar() {
+    cat > ~/.config/waybar/config << 'EOL'
+{
+    "layer": "top",
+    "position": "top",
+    "height": 30,
+    "modules-left": ["custom/launcher", "hyprland/workspaces"],
+    "modules-center": ["clock", "custom/notification"],
+    "modules-right": ["custom/updates", "bluetooth", "network", "pulseaudio", "custom/power"],
+    
+    "custom/launcher": {
+        "format": "",
+        "on-click": "rofi -show drun",
+        "tooltip": false
+    },
+    
+    "hyprland/workspaces": {
+        "format": "{icon}",
+        "on-click": "activate",
+        "format-icons": {
+            "1": "1",
+            "2": "2",
+            "3": "3",
+            "4": "4",
+            "5": "5",
+            "urgent": "",
+            "active": "",
+            "default": ""
+        }
+    },
+    
+    "clock": {
+        "format": "{:%I:%M %p}",
+        "format-alt": "{:%Y-%m-%d}",
+        "tooltip": true
+    },
+    
+    "custom/notification": {
+        "tooltip": false,
+        "format": "{icon}",
+        "format-icons": {
+            "notification": "<span foreground='red'><sup></sup></span>",
+            "none": "",
+            "dnd-notification": "<span foreground='red'><sup></sup></span>",
+            "dnd-none": "",
+            "inhibited-notification": "<span foreground='red'><sup></sup></span>",
+            "inhibited-none": "",
+            "dnd-inhibited-notification": "<span foreground='red'><sup></sup></span>",
+            "dnd-inhibited-none": ""
+        }
+    },
+    
+    "bluetooth": {
+        "format": "",
+        "format-connected": "",
+        "format-disabled": "",
+        "on-click": "blueman-manager",
+        "tooltip": true
+    },
+    
+    "network": {
+        "format-wifi": "直",
+        "format-ethernet": "",
+        "format-disconnected": "睊",
+        "tooltip": false,
+        "on-click": "nm-connection-editor"
+    },
+    
+    "pulseaudio": {
+        "format": "{icon}",
+        "format-bluetooth": "",
+        "format-muted": "",
+        "format-icons": {
+            "headphone": "",
+            "hands-free": "",
+            "headset": "",
+            "phone": "",
+            "portable": "",
+            "car": "",
+            "default": ["", ""]
+        },
+        "scroll-step": 1,
+        "on-click": "pavucontrol"
+    },
+    
+    "custom/power": {
+        "format": "⏻",
+        "on-click": "rofi -show power-menu -modi power-menu:~/.local/bin/rofi-power-menu",
+        "tooltip": false
+    }
+}
+EOL
+
+    # Waybar style
+    cat > ~/.config/waybar/style.css << 'EOL'
+* {
+    font-family: "JetBrainsMono Nerd Font";
+    font-size: 14px;
+    min-height: 0;
+    border: none;
+    border-radius: 0;
+    margin: 0;
+    padding: 0;
+}
+
+window#waybar {
+    background: #1E1E1E;
+    color: #FFFFFF;
+}
+
+#workspaces button {
+    padding: 0 5px;
+    background: transparent;
+    color: #FFFFFF;
+    border-bottom: 3px solid transparent;
+}
+
+#workspaces button.active {
+    background: #9370DB;
+    border-bottom: 3px solid #FFD700;
+}
+
+#clock,
+#battery,
+#cpu,
+#memory,
+#network,
+#pulseaudio,
+#custom-launcher,
+#custom-power {
+    padding: 0 10px;
+    margin: 0 5px;
+    color: #FFFFFF;
+}
+
+#custom-launcher {
+    color: #FFD700;
+    font-size: 20px;
+}
+
+#custom-power {
+    color: #9370DB;
+    font-size: 20px;
+}
+
+#clock {
+    background-color: #9370DB;
+    color: #FFFFFF;
+    border-radius: 5px;
+}
+EOL
+}
+
+# Configure Rofi
+configure_rofi() {
+    mkdir -p ~/.config/rofi
+    cat > ~/.config/rofi/config.rasi << 'EOL'
+configuration {
+    modi: "drun,run,window";
+    show-icons: true;
+    terminal: "alacritty";
+    drun-display-format: "{icon} {name}";
+    location: 0;
+    disable-history: false;
+    hide-scrollbar: true;
+    display-drun: "   Apps ";
+    display-run: "   Run ";
+    display-window: " 﩯  Window";
+    display-Network: " 󰤨  Network";
+    sidebar-mode: true;
+}
+
+@theme "theme"
+
+* {
+    bg-col: #1E1E1E;
+    bg-col-light: #2E2E2E;
+    border-col: #9370DB;
+    selected-col: #1E1E1E;
+    gold: #FFD700;
+    purple: #9370DB;
+    fg-col: #FFFFFF;
+    fg-col2: #FFFFFF;
+    width: 600;
+}
+
+element-text, element-icon , mode-switcher {
+    background-color: inherit;
+    text-color:       inherit;
+}
+
+window {
+    height: 360px;
+    border: 3px;
+    border-color: @border-col;
+    background-color: @bg-col;
+}
+
+mainbox {
+    background-color: @bg-col;
+}
+
+inputbar {
+    children: [prompt,entry];
+    background-color: @bg-col;
+    border-radius: 5px;
+    padding: 2px;
+}
+
+prompt {
+    background-color: @gold;
+    padding: 6px;
+    text-color: @bg-col;
+    border-radius: 3px;
+    margin: 20px 0px 0px 20px;
+}
+
+textbox-prompt-colon {
+    expand: false;
+    str: ":";
+}
+
+entry {
+    padding: 6px;
+    margin: 20px 0px 0px 10px;
+    text-color: @fg-col;
+    background-color: @bg-col;
+}
+
+listview {
+    border: 0px 0px 0px;
+    padding: 6px 0px 0px;
+    margin: 10px 0px 0px 20px;
+    columns: 2;
+    background-color: @bg-col;
+}
+
+element {
+    padding: 5px;
+    background-color: @bg-col;
+    text-color: @fg-col;
+}
+
+element-icon {
+    size: 25px;
+}
+
+element selected {
+    background-color:  @selected-col;
+    text-color: @purple;
+}
+EOL
+}
+
+# Configure Alacritty
+configure_alacritty() {
+    cat > ~/.config/alacritty/alacritty.yml << 'EOL'
+window:
+  padding:
+    x: 10
+    y: 10
+  opacity: 0.95
+
+font:
+  normal:
+    family: JetBrainsMono Nerd Font
+    style: Regular
+  bold:
+    family: JetBrainsMono Nerd Font
+    style: Bold
+  italic:
+    family: JetBrainsMono Nerd Font
+    style: Italic
+  size: 12.0
+
+colors:
+  primary:
+    background: '#1E1E1E'
+    foreground: '#FFFFFF'
+  normal:
+    black:   '#1E1E1E'
+    red:     '#FF6B6B'
+    green:   '#4EC9B0'
+    yellow:  '#FFD700'
+    blue:    '#9370DB'
+    magenta: '#BB9AF7'
+    cyan:    '#7DCFFF'
+    white:   '#FFFFFF'
+  bright:
+    black:   '#2E2E2E'
+    red:     '#FF8888'
+    green:   '#65E6CA'
+    yellow:  '#FFE44D'
+    blue:    '#A995E0'
+    magenta: '#CDB4F9'
+    cyan:    '#98D7FF'
+    white:   '#FFFFFF'
+EOL
+}
+
+# Configure Dunst
+configure_dunst() {
+    cat > ~/.config/dunst/dunstrc << 'EOL'
+[global]
+    monitor = 0
+    follow = mouse
+    width = 300
+    height = 300
+    origin = top-right
+    offset = 10x50
+    scale = 0
+    notification_limit = 0
+    progress_bar = true
+    indicate_hidden = yes
+    transparency = 0
+    separator_height = 2
+    padding = 8
+    horizontal_padding = 8
+    text_icon_padding = 0
+    frame_width = 2
+    frame_color = "#9370DB"
+    gap_size = 0
+    separator_color = frame
+    sort = yes
+    font = JetBrainsMono Nerd Font 11
+    line_height = 0
+    markup = full
+    format = "<b>%s</b>\n%b"
+    alignment = left
+    vertical_alignment = center
+    show_age_threshold = 60
+    ellipsize = middle
+    ignore_newline = no
+    stack_duplicates = true
+    hide_duplicate_count = false
+    show_indicators = yes
+    enable_recursive_icon_lookup = true
+    icon_position = left
+    min_icon_size = 32
+    max_icon_size = 128
+    icon_path = /usr/share/icons/Papirus-Dark/16x16/status/:/usr/share/icons/Papirus-Dark/16x16/devices/:/usr/share/icons/Papirus-Dark/16x16/apps/
+    sticky_history = yes
+    history_length = 20
+    always_run_script = true
+    corner_radius = 8
+    ignore_dbusclose = false
+    force_xwayland = false
+    force_xinerama = false
+    mouse_left_click = close_current
+    mouse_middle_click = do_action, close_current
+    mouse_right_click = close_all
+
+[urgency_low]
+    background = "#1E1E1E"
+    foreground = "#FFFFFF"
+    timeout = 10
+
+[urgency_normal]
+    background = "#1E1E1E"
+    foreground = "#FFFFFF"
+    timeout = 10
+
+[urgency_critical]
+    background = "#1E1E1E"
+    foreground = "#FF6B6B"
+    frame_color = "#FF6B6B"
+    timeout = 0
+EOL
+}
+
+# Create power menu script
+create_power_menu() {
+    mkdir -p ~/.local/bin
+    cat > ~/.local/bin/rofi-power-menu << 'EOL'
+#!/usr/bin/env bash
+
+# CMDs
+uptime_cmd="uptime -p"
+host_cmd="hostname"
+
+# Options
+shutdown=''
+reboot=''
+lock=''
+suspend=''
+logout=''
+
+# Get system uptime
+up=$(${uptime_cmd})
+host=$(${host_cmd})
+
+# Menu
+ps3='Please enter your choice: '
+options="$lock\n$suspend\n$logout\n$reboot\n$shutdown"
+
+chosen="$(echo -e "$options" | rofi -dmenu -i -p "Power" -selected-row 0)"
+case $chosen in
+    $shutdown)
+        systemctl poweroff
+        ;;
+    $reboot)
+        systemctl reboot
+        ;;
+    $lock)
+        swaylock
+        ;;
+    $suspend)
+        systemctl suspend
+        ;;
+    $logout)
+        hyprctl dispatch exit
+        ;;
+esac
+EOL
+
+    chmod +x ~/.local/bin/rofi-power-menu
+}
+
+# Create wallpaper config
+configure_wallpaper() {
+    mkdir -p ~/Pictures/wallpapers
+    # Download a sample wallpaper (you can replace this with your preferred wallpaper)
+    curl -o ~/Pictures/wallpapers/wallpaper.jpg https://images.unsplash.com/photo-1419242902214-272b3f66ee7a
+
+    cat > ~/.config/hypr/hyprpaper.conf << EOL
+preload = ~/Pictures/wallpapers/wallpaper.jpg
+wallpaper = ,~/Pictures/wallpapers/wallpaper.jpg
+EOL
+}
+
+# Main installation function
+main() {
+    remove_existing
+    install_packages
+    create_config_dirs
+    configure_hyprland
+    configure_waybar
+    configure_rofi
+    configure_alacritty
+    configure_dunst
+    create_power_menu
+    configure_wallpaper
+    
+    # Set permissions
+    chmod +x ~/.config/hypr/hyprland.conf
+    
+    echo -e "${GREEN}Installation complete!${NC}"
+    echo -e "${BLUE}Please restart your system to apply all changes.${NC}"
+    echo -e "${GREEN}After restart, you can start Hyprland by running: startx or using your display manager.${NC}"
+}
+
+# Run the script
+main
